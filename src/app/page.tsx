@@ -15,7 +15,7 @@ import { chargerExemples } from "@/lib/demo";
 import { capitalize, jourDate, semaine } from "@/lib/format";
 import { setPrefs, usePrefs } from "@/lib/prefs";
 import { activeGoals, isReviewDue, thisWeek, today } from "@/lib/selectors";
-import { useStore } from "@/lib/store";
+import { useMounted, useStore } from "@/lib/store";
 
 function greeting(name: string): string {
   const h = new Date().getHours();
@@ -29,18 +29,17 @@ export default function AujourdhuiPage() {
   const toast = useToast();
   const [noting, setNoting] = useState<Marker | null>(null);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  const [hello, setHello] = useState("Bonjour");
-  const [subtitle, setSubtitle] = useState("");
+  const mounted = useMounted();
   const goals = activeGoals(data);
   const due = goals.some((g) => isReviewDue(data, g.id, prefs.reviewDay));
   const bannerHidden = prefs.reviewBannerHiddenUntil != null && prefs.reviewBannerHiddenUntil > today();
 
   useEffect(() => {
     document.title = "Aujourd'hui · Cap";
-    // Heure et date lues côté client seulement (pas de décalage d'hydratation).
-    setHello(greeting(prefs.firstName));
-    setSubtitle(`${capitalize(jourDate(new Date()))} · semaine ${semaine(thisWeek())}`);
-  }, [prefs.firstName]);
+  }, []);
+  // Heure et date lues côté client seulement (pas de décalage d'hydratation).
+  const hello = mounted ? greeting(prefs.firstName) : "Bonjour";
+  const subtitle = mounted ? `${capitalize(jourDate(new Date()))} · semaine ${semaine(thisWeek())}` : "";
 
   const loadDemo = async () => {
     setLoadingDemo(true);

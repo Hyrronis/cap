@@ -36,6 +36,8 @@ export default function ConnexionPage() {
   const startLocal = () => {
     setPrefs({ localMode: true, onboarded: true });
     resetRepository();
+    // Rechargement complet : le repository est choisi une fois au démarrage.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/");
   };
 

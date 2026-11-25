@@ -7,7 +7,6 @@ import { z } from "zod";
 import { DB_LIMITS } from "../db-types.ts";
 import type { CapData } from "../domain/types.ts";
 
-// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
 
 /** Texte libre : trim, longueur max, pas de caractères de contrôle. */

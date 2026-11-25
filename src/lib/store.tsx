@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { CapData } from "@/lib/domain/types";
 import { emptyCapData, getRepository, type Repository } from "@/lib/repo";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -68,4 +68,10 @@ export function useStore(): StoreValue {
   const v = useContext(StoreContext);
   if (!v) throw new Error("useStore hors de StoreProvider");
   return v;
+}
+
+const noopSubscribe = () => () => {};
+/** Vrai après l'hydratation (valeurs dépendant de l'horloge ou du navigateur). */
+export function useMounted(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
 }

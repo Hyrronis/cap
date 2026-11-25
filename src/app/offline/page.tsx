@@ -1,4 +1,5 @@
 import { WifiOff } from "lucide-react";
+import Link from "next/link";
 
 export const metadata = { title: "Hors ligne" };
 
@@ -11,9 +12,9 @@ export default function OfflinePage() {
       </span>
       <h1 className="text-title">Tu es hors ligne</h1>
       <p className="text-body text-ink-muted">Cette page n&apos;est pas disponible sans réseau. Réessaie dès que la connexion revient.</p>
-      <a href="/" className="inline-flex h-12 items-center rounded-md bg-primary px-5 font-semibold text-primary-on">
+      <Link href="/" prefetch={false} className="inline-flex h-12 items-center rounded-md bg-primary px-5 font-semibold text-primary-on">
         Réessayer
-      </a>
+      </Link>
     </div>
   );
 }
