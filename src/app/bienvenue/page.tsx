@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, type TouchEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { IconCircle } from "@/components/ui/feedback";
+import { useToast } from "@/components/ui/toast";
 import { setPrefs } from "@/lib/prefs";
 
 const SLIDES = [
@@ -31,6 +32,12 @@ export default function BienvenuePage() {
   const slide = SLIDES[step - 1];
   const titleRef = useRef<HTMLHeadingElement>(null);
   const touchX = useRef<number | null>(null);
+  const toast = useToast();
+  const deleted = params.get("supprime") === "1";
+
+  useEffect(() => {
+    if (deleted) toast("Tes données ont été supprimées. Prends soin de toi.");
+  }, [deleted, toast]);
 
   useEffect(() => {
     document.title = `${slide.title} · Cap`;
