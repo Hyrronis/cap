@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/db-types";
 import { cookies } from "next/headers";
 import { getSupabaseEnv } from "./env";
 
@@ -8,12 +9,12 @@ import { getSupabaseEnv } from "./env";
  * Client Supabase côté serveur (Server Components, Route Handlers, Server Actions).
  * Un client par requête (jamais partagé). Retourne `null` si l'env est absente.
  */
-export async function createClient(): Promise<SupabaseClient | null> {
+export async function createClient(): Promise<SupabaseClient<Database> | null> {
   const env = getSupabaseEnv();
   if (!env) return null;
   const cookieStore = await cookies();
 
-  return createServerClient(env.url, env.anonKey, {
+  return createServerClient<Database>(env.url, env.anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
