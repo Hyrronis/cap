@@ -44,15 +44,16 @@ export function MetricChart({ marker, measurements, refDate, weeks = 8 }: { mark
     width,
     height: 200,
     data: points,
-    margin: { top: 16, right: 12, bottom: 0, left: -12 },
+    margin: { top: 16, right: 24, bottom: 0, left: -12 },
   };
   const axes = (
     <>
       <CartesianGrid vertical={false} stroke="var(--color-chart-grid)" />
-      <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--color-text-muted)" }} tickLine={false} axisLine={false} interval={0} />
+      <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--color-text-muted)" }} tickLine={false} axisLine={false} interval="preserveEnd" minTickGap={2} padding={{ left: 8, right: 20 }} />
       <YAxis tick={{ fontSize: 12, fill: "var(--color-text-muted)" }} tickLine={false} axisLine={false} width={48} domain={["auto", "auto"]} />
       <ReferenceLine
         y={marker.target}
+        ifOverflow="extendDomain"
         stroke="var(--color-chart-target)"
         strokeDasharray="5 4"
         label={{ value: `But ${nombre(marker.target)}`, position: "insideTopRight", fontSize: 12, fill: "var(--color-text-muted)" }}

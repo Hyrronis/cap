@@ -25,3 +25,4 @@ supabase/.temp
 npm-debug.log*
 .vercel
 coverage
+captures/

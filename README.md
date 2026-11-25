@@ -23,7 +23,11 @@ cp .env.example .env.local
 # puis renseigner NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
-Dès que les deux variables sont présentes, `getRepository()` bascule sur l'implémentation Supabase.
+Dès que les deux variables sont présentes, `getRepository()` bascule sur l'implémentation Supabase
+(sauf si la personne choisit « Continuer sans compte »). La suppression de compte demande aussi
+`SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`), lue uniquement côté serveur.
+
+Pour essayer sans rien saisir : « Essayer avec des exemples » (écran Aujourd'hui vide, ou Réglages).
 
 ## Scripts
 
@@ -43,12 +47,16 @@ relatifs **avec l'extension `.ts`** et éviter les syntaxes TypeScript non effa�
 
 ```
 src/
-  app/                  layout (lang="fr", colonne mobile max-w-md), accueil, manifest PWA
-  components/           composants partagés (enregistrement du service worker)
+  app/                  écrans (App Router) : /, /objectifs, /bilan, /carnet, /reglages, parcours pas à pas,
+                        /connexion, /auth/callback (lien magique), /offline ; actions serveur (suppression de compte)
+  proxy.ts              CSP à nonce + rafraîchissement de session Supabase (Next 16)
+  components/ui/        primitives de la charte (boutons, champs, puces, feuilles, toasts, barre d'onglets…)
+  components/cap/       composants métier (carte du jour, graphique des repères, assistant objectif…)
   lib/
-    repo/               couche d'accès aux données : interface Repository + implémentations
-                        LocalRepository (localStorage versionné) et SupabaseRepository
-    supabase/           clients navigateur et serveur (@supabase/ssr) ; null si env absente
+    domain/             types, calculs purs et données d'exemple (rôle data)
+    repo/               Repository (CapData) : schémas zod, LocalRepository (cap:v1:data), SupabaseRepository
+    supabase/           clients navigateur, serveur et admin (server-only) ; null si env absente
+    store.tsx prefs.ts  état client (données + préférences de l'appareil, brouillons)
 public/
   sw.js                 service worker écrit à la main (actif en production uniquement)
   icons/                icônes PWA (192, 512, maskable, apple-touch)
