@@ -9,7 +9,10 @@ export function safeNextPath(next: string | null | undefined): string {
   try {
     const url = new URL(next, "http://interne.invalid");
     if (url.origin !== "http://interne.invalid") return "/";
-    return `${url.pathname}${url.search}${url.hash}`;
+    const path = `${url.pathname}${url.search}${url.hash}`;
+    // La normalisation (« /a/../..//x ») peut recréer un « // » en tête : URL de protocole relatif.
+    if (path.startsWith("//") || path.startsWith("/\\")) return "/";
+    return path;
   } catch {
     return "/";
   }
