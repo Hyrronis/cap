@@ -26,7 +26,7 @@ export async function createClient(): Promise<SupabaseClient<Database> | null> {
           }
         } catch {
           // Appelé depuis un Server Component : écriture impossible, ignorée.
-          // Le rafraîchissement de session se fera dans le proxy/middleware (phase 2).
+          // Le rafraîchissement de session est fait par src/proxy.ts.
         }
       },
     },
