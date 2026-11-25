@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+/* Couleurs neutres provisoires : la charte définitive viendra du rôle UI/UX. */
+@theme {
+  --color-fond: #f8fafc;
+  --color-encre: #1f2937;
+  --color-accent: #1f2937;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background-color: var(--color-fond);
+  color: var(--color-encre);
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
