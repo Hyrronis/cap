@@ -12,6 +12,7 @@ import { ChipGroup, RatingScale, TextArea, TextField } from "@/components/ui/for
 import { StepHeader, StepQuestion, StickyFooter } from "@/components/ui/layout";
 import { BottomSheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { fusionnerSansDoublons, profilDeObjectif } from "@/lib/domain/profils";
 import { CAUSE_FAMILIES, CAUSE_FAMILY_LABELS, type CauseFamily } from "@/lib/domain/types";
 import { clearDraft, readDraft, writeDraft } from "@/lib/prefs";
 import { causeFamilySchema } from "@/lib/repo/schemas";
@@ -121,6 +122,7 @@ export default function CreuserPage() {
   const targetLabel = draft.target || pareto.top[0]?.label || probable;
   const targetCause = draft.causes.find((c) => c.label === targetLabel);
   const weekActions = actionsOf(data, goal.id, thisWeek());
+  const profil = profilDeObjectif(goal);
 
   const save = async (replace: string | "keep" | null) => {
     setSaving(true);
@@ -202,7 +204,7 @@ export default function CreuserPage() {
           label="Ce qui coince"
           hideLabel
           maxLength={1000}
-          placeholder="Ex. : je ne vais pas courir le soir"
+          placeholder={profil.exempleBlocage}
           value={draft.problem}
           onChange={(e) => update({ problem: e.target.value })}
           hint="Évite d'écrire des informations sur d'autres personnes ou des données médicales détaillées."
@@ -275,8 +277,13 @@ export default function CreuserPage() {
     const k = Math.min(5, Math.max(1, Number(famMatch[1])));
     const family = CAUSE_FAMILIES[k - 1];
     const info = FAMILIES[family];
+    // Causes fréquentes pour ce type d'objectif d'abord, puis les causes générales.
+    const chips = fusionnerSansDoublons(
+      profil.causes.filter((c) => c.famille === family).map((c) => c.label),
+      info.chips,
+    );
     const mine = draft.causes.filter((c) => c.family === family).map((c) => c.label);
-    const extra = mine.filter((l) => !info.chips.includes(l));
+    const extra = mine.filter((l) => !chips.includes(l));
     const next = () => {
       if (k < 5) go(`famille-${k + 1}`);
       else go(draft.causes.length ? "poids" : "aucune");
@@ -292,7 +299,7 @@ export default function CreuserPage() {
           label={CAUSE_FAMILY_LABELS[family]}
           mode="multiple"
           value={mine}
-          options={[...info.chips, ...extra].map((v) => ({ value: v, label: v }))}
+          options={[...chips, ...extra].map((v) => ({ value: v, label: v }))}
           onChange={(v) => toggleCause(family, v)}
         />
         {addingCustom ? (
