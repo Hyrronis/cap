@@ -198,7 +198,9 @@ export default function ReglagesPage() {
           Idées de l&apos;IA
         </h2>
         <p className="text-small text-ink-muted">
-          Sur demande seulement, ton objectif est envoyé à l&apos;IA Claude d&apos;Anthropic pour te proposer des idées. Rien n&apos;est conservé par Cap.
+          Sur demande seulement, le texte de ton objectif (et les réponses liées) est envoyé à l&apos;IA Claude d&apos;Anthropic, hors de l&apos;Union
+          européenne, pour te proposer des idées. Cap n&apos;enregistre pas ta demande.
+          {prefs.ia === "inconnu" && " Pas encore choisi : on te demandera ton accord à la première utilisation."}
         </p>
         <SegmentedControl
           label="Idées de l'IA"
@@ -206,7 +208,7 @@ export default function ReglagesPage() {
             { value: "oui", label: "Activées" },
             { value: "non", label: "Désactivées" },
           ]}
-          value={prefs.ia === "non" ? "non" : "oui"}
+          value={prefs.ia}
           onChange={(v) => setPrefs({ ia: v })}
         />
       </section>

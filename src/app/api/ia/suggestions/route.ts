@@ -36,6 +36,9 @@ export function GET() {
 export async function POST(req: NextRequest) {
   if (!memeOrigine(req)) return json({ erreur: "origine" }, 403);
   if (!iaDisponible()) return json({ disponible: false }, 503);
+  if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+    return json({ disponible: true, erreur: "entree" }, 415);
+  }
 
   const taille = Number(req.headers.get("content-length") ?? "0");
   if (taille > IA_MAX_BODY) return json({ disponible: true, erreur: "trop_gros" }, 413);

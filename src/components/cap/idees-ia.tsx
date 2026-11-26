@@ -53,7 +53,9 @@ export function IdeesIa({ entree, onIdees }: { entree: () => IaEntree; onIdees: 
     return (
       <section aria-label="Idées de l'IA" className="space-y-3 rounded-lg bg-primary-soft p-4">
         <p className="text-small">
-          Ton objectif (et seulement lui) est envoyé à l&apos;IA Claude d&apos;Anthropic pour te proposer des idées. Rien n&apos;est conservé par Cap.
+          Pour te proposer des idées, le texte de ton objectif (et, selon l&apos;écran, les réponses que tu viens d&apos;écrire) est envoyé à l&apos;IA Claude
+          d&apos;Anthropic, une société américaine : il quitte donc l&apos;Union européenne. Ni ton e-mail ni ton identifiant ne sont envoyés, et Cap
+          n&apos;enregistre pas ta demande.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
