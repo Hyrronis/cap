@@ -9,6 +9,8 @@ import { Chip, ChipGroup, SegmentedControl, Stepper, TextField } from "@/compone
 import { AppHeader, StickyFooter } from "@/components/ui/layout";
 import { useToast } from "@/components/ui/toast";
 import { addDays, isIsoDate, weekStart } from "@/lib/domain/calculs";
+import { IdeesIa } from "@/components/cap/idees-ia";
+import type { IaSortie } from "@/lib/ia/schema";
 import { fusionnerSansDoublons, memeLibelle, profilDeObjectif, type RepereSuggere } from "@/lib/domain/profils";
 import type { MarkerAggregation, MarkerDirection } from "@/lib/domain/types";
 import { JOURS, JOURS_COURTS, lireNombre, semaine } from "@/lib/format";
@@ -55,6 +57,7 @@ export default function PlanPage() {
   const [markers, setMarkers] = useState<MarkerRow[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [idees, setIdees] = useState<IaSortie | null>(null);
 
   useEffect(() => {
     document.title = "Mon plan de la semaine · Cap";
@@ -105,11 +108,14 @@ export default function PlanPage() {
       .filter((s) => s.length >= 4 && s.length <= 120)
       .slice(0, 3)
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-    return fusionnerSansDoublons(parts, profil.actions)
+    return fusionnerSansDoublons(idees?.actions ?? [], parts, profil.actions)
       .filter((s) => !actions.some((a) => memeLibelle(a.label, s)))
-      .slice(0, 6);
+      .slice(0, idees ? 9 : 6);
   })();
-  const markerSuggestions = profil.reperes.filter((r) => !markers.some((m) => memeLibelle(m.name, r.nom)));
+  const markerSuggestions: RepereSuggere[] = [
+    ...(idees?.reperes ?? []).map((r) => ({ nom: r.nom, unite: r.unite, sens: r.sens, regroupement: r.regroupement, cible: r.cible, depart: 0 })),
+    ...profil.reperes,
+  ].filter((r, i, all) => all.findIndex((x) => memeLibelle(x.nom, r.nom)) === i && !markers.some((m) => memeLibelle(m.name, r.nom)));
   const addMarker = (r?: RepereSuggere) =>
     setMarkers((list) => [
       ...list,
@@ -236,6 +242,17 @@ export default function PlanPage() {
           <p role="alert" className="text-small font-semibold text-attention">
             Écris ton action en quelques mots.
           </p>
+        )}
+        {actions.length < 3 && (
+          <IdeesIa
+            entree={() => ({
+              etape: "plan",
+              objectif: (goal.context?.what || goal.title).slice(0, 120),
+              pourquoi: goal.context?.why?.slice(0, 200) || undefined,
+              comment: goal.context?.how?.slice(0, 1000) || undefined,
+            })}
+            onIdees={setIdees}
+          />
         )}
         {actions.length < 3 ? (
           <Button variant="ghost" iconLeft={<Plus size={20} aria-hidden="true" />} onClick={() => addAction()}>

@@ -17,6 +17,8 @@ const prefsSchema = z.strictObject({
   /** « Continuer sans compte » accepté. */
   localMode: z.boolean().default(false),
   sharedDeviceNoticeSeen: z.boolean().default(false),
+  /** Idées de l'IA : « inconnu » = consentement pas encore demandé. */
+  ia: z.enum(["inconnu", "oui", "non"]).default("inconnu"),
   /** Bannière bilan masquée jusqu'à cette date (exclue). */
   reviewBannerHiddenUntil: z.iso.date().optional(),
 });

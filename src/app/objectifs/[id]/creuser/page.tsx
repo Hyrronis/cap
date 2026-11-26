@@ -12,6 +12,8 @@ import { ChipGroup, RatingScale, TextArea, TextField } from "@/components/ui/for
 import { StepHeader, StepQuestion, StickyFooter } from "@/components/ui/layout";
 import { BottomSheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { IdeesIa } from "@/components/cap/idees-ia";
+import type { IaSortie } from "@/lib/ia/schema";
 import { fusionnerSansDoublons, profilDeObjectif } from "@/lib/domain/profils";
 import { CAUSE_FAMILIES, CAUSE_FAMILY_LABELS, type CauseFamily } from "@/lib/domain/types";
 import { clearDraft, readDraft, writeDraft } from "@/lib/prefs";
@@ -76,6 +78,7 @@ export default function CreuserPage() {
   const [replaceAsk, setReplaceAsk] = useState(false);
   const [replaceId, setReplaceId] = useState<string | "keep" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [idees, setIdees] = useState<IaSortie | null>(null);
 
   const lastStuck = goal ? reviewsOf(data, goal.id).find((r) => r.verdict === "stuck") : undefined;
 
@@ -279,6 +282,7 @@ export default function CreuserPage() {
     const info = FAMILIES[family];
     // Causes fréquentes pour ce type d'objectif d'abord, puis les causes générales.
     const chips = fusionnerSansDoublons(
+      (idees?.causes ?? []).filter((c) => c.famille === family).map((c) => c.libelle),
       profil.causes.filter((c) => c.famille === family).map((c) => c.label),
       info.chips,
     );
@@ -301,6 +305,15 @@ export default function CreuserPage() {
           value={mine}
           options={[...chips, ...extra].map((v) => ({ value: v, label: v }))}
           onChange={(v) => toggleCause(family, v)}
+        />
+        <IdeesIa
+          entree={() => ({
+            etape: "causes",
+            objectif: (goal.context?.what || goal.title).slice(0, 120),
+            titre: draft.problem.trim().slice(0, 300) || undefined,
+            pourquois: whys.map((w) => w.trim().slice(0, 300)).slice(0, 5),
+          })}
+          onIdees={setIdees}
         />
         {addingCustom ? (
           <form

@@ -27,6 +27,15 @@ Dès que les deux variables sont présentes, `getRepository()` bascule sur l'imp
 (sauf si la personne choisit « Continuer sans compte »). La suppression de compte demande aussi
 `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`), lue uniquement côté serveur.
 
+### Idées de l'IA (optionnel)
+
+Le bouton « Demander des idées à l'IA » (assistant, plan, Creuser la cause) appelle la route serveur
+`POST /api/ia/suggestions`, qui interroge Claude (`claude-opus-5-5`, sortie JSON validée par zod) via
+`@anthropic-ai/sdk`. Il faut `ANTHROPIC_API_KEY` côté serveur (Vercel, « Sensitive ») ; sans clé, la route
+répond 503 `{ disponible: false }` et l'app garde ses idées habituelles (`src/lib/domain/profils.ts`).
+Protections : même origine exigée, corps ≤ 8 Ko, 10 requêtes / 10 min par IP (mémoire, best-effort),
+consentement demandé à la première utilisation (désactivable dans Réglages), aucun identifiant envoyé.
+
 Pour essayer sans rien saisir : « Essayer avec des exemples » (écran Aujourd'hui vide, ou Réglages).
 
 ## Scripts
@@ -53,7 +62,8 @@ src/
   components/ui/        primitives de la charte (boutons, champs, puces, feuilles, toasts, barre d'onglets…)
   components/cap/       composants métier (carte du jour, graphique des repères, assistant objectif…)
   lib/
-    domain/             types, calculs purs et données d'exemple (rôle data)
+    domain/             types, calculs purs, données d'exemple, profils d'objectif (profils.ts)
+    ia/                 idées de l'IA : schémas zod + prompt (schema.ts), appel SDK (appel.ts), client serveur (claude.ts)
     repo/               Repository (CapData) : schémas zod, LocalRepository (cap:v1:data), SupabaseRepository
     supabase/           clients navigateur, serveur et admin (server-only) ; null si env absente
     store.tsx prefs.ts  état client (données + préférences de l'appareil, brouillons)
