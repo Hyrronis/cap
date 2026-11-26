@@ -98,3 +98,35 @@ Légende : `[x]` conforme · `[ ]` non conforme ou non vérifiable (voir le cons
 2. M4 : transfert local → compte, puis purge locale.
 3. I2 et I3 : exécuter le test RLS A/B sur une base réelle, consulter le Security Advisor, configurer Supabase Auth et la région UE.
 4. F7 et F8 : CI de sécurité et purge des comptes inactifs.
+
+---
+
+# Revue de sécurité — branche `adapter-objectif` (profils d'objectifs et idées de l'IA)
+
+> Code revu : `2fc1689` et `39fed13`, puis ma correction `71f838b`. `main` n'a pas été modifiée.
+> Après correction : lint OK, `tsc` OK, `npm test` 97/97 OK, `npm run build` OK, `npm audit --audit-level=high` : 0 vulnérabilité.
+> Tests au `curl` sur `next start` : `GET` renvoie `{"disponible":false}` ; `POST` sans `Origin` → 403 ; `POST` même origine sans clé → 503 ; `Cache-Control: private, no-store` et CSP présents.
+
+**Bilan** : aucune faille critique ni élevée. Le point principal non corrigé est le **risque de facture abusive** (M5) : un client hors navigateur peut contourner les protections actuelles.
+
+| # | Gravité | Constat | Statut |
+|---|---|---|---|
+| M5 | **Moyenne** | **Abus de coût.** La route `POST /api/ia/suggestions` n'exige pas de session, et l'en-tête `Origin` se falsifie librement hors navigateur (la vérification ne protège que du CSRF). La limite de 10 requêtes par 10 min et par IP est **en mémoire, propre à chaque instance serverless** : sur Vercel elle est contournable (plusieurs instances, démarrages à froid, rotation d'IP). Chaque appel coûte des jetons Claude Opus. | Non corrigé (choix d'infrastructure). Il faut : (1) une **limite de dépenses** sur la clé ou l'espace de travail Anthropic ; (2) une **règle de limitation de débit Vercel Firewall (WAF)** sur `/api/ia/*`, ou un compteur partagé (Upstash, Postgres) ; (3) quand Supabase est actif, exiger `getUser()` et limiter par utilisateur. |
+| M6 | Moyenne | **Consentement et politique inexacts.** Le texte disait « ton objectif (et seulement lui) » alors que le pourquoi, le comment et les réponses de « creuser » sont aussi envoyés, et le transfert hors UE n'était pas mentionné. La politique affirmait sans réserve qu'Anthropic n'entraîne pas ses modèles avec ces données, qu'il les supprime, et que le transfert repose sur les clauses contractuelles types. | **Corrigé** (`71f838b`) : texte exact, transfert hors UE signalé, garanties formulées « selon ses conditions et son accord de traitement ». **À faire avant la mise en ligne** : accepter le DPA d'Anthropic et vérifier sa base de transfert (CCT ou Data Privacy Framework) et ses durées de conservation, puis ajuster la phrase si besoin. Inscrire Anthropic au registre des traitements. |
+| F9 | Faible | **Injection de prompt.** Le texte saisi pouvait contenir `</objectif_utilisateur>` et sortir de l'encadrement. Impact limité : pas d'outils, aucune action possible, sortie validée par zod, et seule la personne elle-même voit le résultat. | **Corrigé** (`71f838b`) : les balises sont retirées des champs avant l'envoi, avec un test. |
+| F10 | Faible | La route acceptait un `Content-Type` quelconque. | **Corrigé** : `application/json` exigé, 415 sinon. |
+| F11 | Faible | Réglages : l'état « pas encore choisi » (`ia: "inconnu"`) s'affichait comme « Activées ». | **Corrigé** : aucune option sélectionnée, avec une mention « on te demandera ton accord ». |
+| F12 | Faible | L'IP vient de `x-forwarded-for` (1re valeur). C'est fiable sur Vercel, qui réécrit l'en-tête, mais falsifiable derrière un autre proxy. | Accepté pour Vercel, à documenter si on change d'hébergeur. |
+| F13 | Faible | Le consentement n'est mémorisé que sur l'appareil (`cap:v1:prefs`) : il n'y a pas de preuve côté serveur. | Accepté au MVP (pas d'envoi sans clic explicite). À tracer côté compte si l'usage se généralise. |
+| I5 | Info | `req.text()` lit tout le corps avant de contrôler sa longueur quand `Content-Length` est absent. Vercel plafonne de toute façon le corps à 4,5 Mo. | Accepté. |
+| I6 | Info | Pas de repli serveur en cas de refus (`fallbacks`) : un refus renvoie `raison: "refus"` et l'interface garde les idées des profils. | Accepté, comportement voulu. |
+
+## Points vérifiés conformes
+- [x] **Clé** : `ANTHROPIC_API_KEY` n'est lue que dans `src/lib/ia/claude.ts` (`import "server-only"`). Elle n'a pas de préfixe `NEXT_PUBLIC_` et figure vide dans `.env.example`. Après le build, `.next/static` ne contient ni `ANTHROPIC_API_KEY`, ni `sk-ant`, ni `api.anthropic.com`, ni le prompt. Le SDK n'est importé que côté serveur (le composant client n'importe que des types).
+- [x] **Journaux** : aucun `console.*` dans `src/lib/ia` ni dans la route ; les erreurs sont réduites à un code (`refus`, `limite`, `format`…), sans contenu ni détail de l'API.
+- [x] **Minimisation** : schéma d'entrée `strictObject` (aucun id, e-mail ni prénom), longueurs bornées, caractères de contrôle refusés, corps limité à 8 Ko, champs « causes » réservés à cette étape.
+- [x] **Sortie** : structured outputs (JSON Schema fermé), puis `iaSortieSchema` (zod), avec longueurs bornées, enums et nombres finis. `refusal` et `max_tokens` sont gérés. Le rendu se fait en texte React (puces), sans `dangerouslySetInnerHTML` ; les idées gardées repassent par la validation du repository.
+- [x] **Le texte utilisateur ne déclenche rien** : aucun outil déclaré, une seule requête, le prompt système traite le texte comme une donnée.
+- [x] **CSP** : inchangée. Le navigateur n'appelle que la même origine (`connect-src 'self'`) et l'appel à Anthropic part du serveur. Le service worker ne met pas `/api/` en cache, et la route répond en `no-store`.
+- [x] **Consentement** : demandé au premier clic, jamais d'appel automatique ; « Non merci » masque le bouton ; le choix est réversible dans Réglages. La base légale indiquée est le consentement.
+- [x] **Client** : `timeout: 20 s`, `maxRetries: 1`, modèle `claude-opus-5-5`, `effort: "low"`.
