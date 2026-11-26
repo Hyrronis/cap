@@ -110,6 +110,7 @@ function goalToRow(g: Partial<GoalInput>): GoalUpdate {
   const row: GoalUpdate = {};
   if (g.title !== undefined) row.title = g.title;
   if ("icon" in g) row.icon = orNull(g.icon);
+  // `profil` n'a pas de colonne : il est recalculé à partir du titre (domain/profils.ts).
   if (g.status !== undefined) {
     row.status = GOAL_STATUS_FROM_DOMAIN[g.status];
     row.achieved_on = g.status === "achieved" ? dateTimeToDate(g.achievedAt ?? new Date().toISOString()) : null;

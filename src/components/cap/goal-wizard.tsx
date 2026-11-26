@@ -12,6 +12,9 @@ import { StepHeader, StepQuestion, StickyFooter } from "@/components/ui/layout";
 import { BottomSheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { addDays, daysBetween, weekStart } from "@/lib/domain/calculs";
+import { IdeesIa } from "@/components/cap/idees-ia";
+import { PROFILS, detecterProfil, fusionnerSansDoublons, memeLibelle, premierNombre, profilParId, type Profil, type RepereSuggere } from "@/lib/domain/profils";
+import type { IaEntree, IaSortie } from "@/lib/ia/schema";
 import type { Goal } from "@/lib/domain/types";
 import { lireNombre, nombre } from "@/lib/format";
 import { clearDraft, readDraft, writeDraft } from "@/lib/prefs";
@@ -29,6 +32,9 @@ const draftSchema = z.object({
   baseline: z.string().max(20).default(""),
   unit: z.string().max(20).default(""),
   direction: z.enum(["up", "down"]).default("up"),
+  aggregation: z.enum(["sum", "avg", "last"]).default("last"),
+  /** Profil choisi à la main (sinon détecté à partir du texte). */
+  profil: z.string().max(30).nullable().default(null),
   deadlineChoice: z.enum(["1m", "3m", "6m", "date"]).nullable().default(null),
   deadline: z.string().max(10).default(""),
   how: z.string().max(1000).default(""),
@@ -68,6 +74,8 @@ function draftFromGoal(goal: Goal, data: ReturnType<typeof useStore>["data"]): D
     baseline: m ? String(m.baseline).replace(".", ",") : "",
     unit: m?.unit ?? "",
     direction: m?.direction ?? "up",
+    aggregation: m?.aggregation ?? "last",
+    profil: goal.profil ?? null,
     deadlineChoice: goal.smart.deadline ? "date" : null,
     deadline: goal.smart.deadline ?? "",
     how: goal.context?.how ?? "",
@@ -78,6 +86,51 @@ function draftFromGoal(goal: Goal, data: ReturnType<typeof useStore>["data"]): D
     feasibility: 3,
     name: goal.title,
   };
+}
+
+/** Repère principal proposé par le profil (le but chiffré est repris du texte s'il y en a un). */
+function prefillMarker(profil: Profil, d: Draft): Partial<Draft> {
+  const r = profil.reperes[0];
+  const n = premierNombre(d.what);
+  return {
+    measureName: r.nom,
+    unit: r.unite,
+    direction: r.sens,
+    aggregation: r.regroupement,
+    target: d.target.trim() ? d.target : n != null && n > 0 ? String(n).replace(".", ",") : "",
+    baseline: d.baseline.trim() ? d.baseline : r.depart != null ? String(r.depart).replace(".", ",") : "",
+  };
+}
+
+const PREFILLED_NAMES = new Set(PROFILS.map((p) => p.reperes[0].nom));
+
+/** Petite ligne discrète : profil repéré + possibilité d'en choisir un autre. */
+function ProfilLine({ profil, onChange }: { profil: Profil; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <p className="-mt-2 mb-3 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">
+        <span>
+          Objectif repéré : <span className="font-semibold text-ink">{profil.libelle}</span>
+        </span>
+        <span aria-hidden="true">·</span>
+        <button type="button" className="min-h-11 font-semibold text-primary underline" onClick={() => setOpen(true)} aria-label={`Changer le type d'objectif (actuellement ${profil.libelle})`}>
+          changer
+        </button>
+      </p>
+      <BottomSheet open={open} title="Ton objectif parle plutôt de…" description="On adapte les exemples et les idées." onClose={() => setOpen(false)}>
+        <ChipGroup
+          label="Type d'objectif"
+          value={profil.id}
+          options={PROFILS.map((p) => ({ value: p.id, label: p.libelle }))}
+          onChange={(v) => {
+            onChange(v);
+            setOpen(false);
+          }}
+        />
+      </BottomSheet>
+    </>
+  );
 }
 
 function canContinue(step: number, d: Draft): boolean {
@@ -120,6 +173,8 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
   const [resumeOffer, setResumeOffer] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(params.get("id"));
+  /** Idées de l'IA reçues pour un texte d'objectif donné (jamais demandées automatiquement). */
+  const [ia, setIa] = useState<{ pour: string; idees: IaSortie } | null>(null);
 
   // Initialisation : brouillon, objectif à modifier, ou recette.
   useEffect(() => {
@@ -141,9 +196,24 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
       return next;
     });
 
+  const profil: Profil = (draft && (profilParId(draft.profil) ?? detecterProfil(draft.what))) || PROFILS[PROFILS.length - 1];
+
   const go = (n: number) => {
-    if (draft) writeDraft(draftName, { ...draft, step: n });
+    if (draft) {
+      let next: Draft = { ...draft, step: n };
+      // En arrivant sur le repère, on le préremplit selon le type d'objectif.
+      if (n === 3 && !draft.measureName.trim() && !draft.unit.trim()) next = { ...next, ...prefillMarker(profil, draft) };
+      setDraft(next);
+      writeDraft(draftName, next);
+    }
     router.push(`${base}?etape=${n}`);
+  };
+
+  const changeProfil = (id: string) => {
+    const p = profilParId(id);
+    if (!draft || !p) return;
+    const auto = PREFILLED_NAMES.has(draft.measureName.trim());
+    update({ profil: p.id, ...(auto ? { ...prefillMarker(p, draft), target: draft.target, baseline: draft.baseline } : {}) });
   };
 
   const summary: SummaryInput = useMemo(
@@ -169,6 +239,7 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
     const baseline = lireNombre(draft.baseline) ?? 0;
     const goalFields = {
       title: draft.name.trim().slice(0, 120),
+      profil: profil.id,
       smart: {
         specific: draft.what.trim(),
         measurable: `${draft.measureName.trim()} : ${nombre(target)} ${draft.unit.trim()}`,
@@ -191,8 +262,7 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
       baseline,
       target,
       direction: draft.direction,
-      // Le but de l'objectif est une valeur à atteindre : dernière valeur notée.
-      aggregation: "last" as const,
+      aggregation: draft.aggregation,
     };
     try {
       const id = await run(async (repo) => {
@@ -201,7 +271,7 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
           const markers = data.markers.filter((m) => m.goalId === editing.id).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
           const [first, ...rest] = markers;
           await repo.saveMarkers(editing.id, [
-            { ...marker, id: first?.id, aggregation: first?.aggregation ?? "last" },
+            { ...marker, id: first?.id },
             ...rest.map(({ id, name, unit, baseline: b, target: t, direction, aggregation }) => ({ id, name, unit, baseline: b, target: t, direction, aggregation })),
           ]);
           return editing.id;
@@ -258,6 +328,19 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
 
   if (!draft) return null;
   const ok = canContinue(step, draft);
+  const idees = ia && ia.pour === draft.what ? ia.idees : null;
+  const iaEntree = (): IaEntree => ({
+    etape: "objectif",
+    objectif: draft.what.trim().slice(0, 120),
+    pourquoi: draft.why.trim().slice(0, 200) || undefined,
+    comment: draft.how.trim().slice(0, 1000) || undefined,
+  });
+  const comments = fusionnerSansDoublons(idees?.comment ?? [], profil.exemplesComment).slice(0, 6);
+  const iaBouton = <IdeesIa entree={iaEntree} onIdees={(s) => setIa({ pour: draft.what, idees: s })} />;
+  const repereIdees: RepereSuggere[] = [
+    ...(idees?.reperes ?? []).map((r) => ({ nom: r.nom, unite: r.unite, sens: r.sens, regroupement: r.regroupement, cible: r.cible })),
+    ...profil.reperes,
+  ].filter((r, i, all) => all.findIndex((x) => memeLibelle(x.nom, r.nom)) === i && !memeLibelle(r.nom, draft.measureName));
   const daysToDeadline = draft.deadline ? daysBetween(today(), draft.deadline) : null;
 
   return (
@@ -289,27 +372,52 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
       {step === 2 && (
         <>
           <StepQuestion help="Ta raison profonde. C'est elle qui te portera les jours sans envie.">Pourquoi c&apos;est important pour toi ?</StepQuestion>
+          <ProfilLine profil={profil} onChange={changeProfil} />
           <TextArea label="Ta raison" hideLabel maxLength={200} value={draft.why} onChange={(e) => update({ why: e.target.value })} />
           <ChipGroup
             label="Exemples"
             className="mt-3"
             mode="multiple"
             value={[]}
-            options={["Me sentir en forme", "Avoir plus confiance en moi", "Être serein·e côté argent", "Avoir plus de temps pour moi"].map((v) => ({ value: v, label: v }))}
+            options={fusionnerSansDoublons(idees?.raisons ?? [], profil.raisons)
+              .slice(0, 8)
+              .map((v) => ({ value: v, label: v }))}
             onChange={(v) => update({ why: v })}
           />
+          <div className="mt-4">{iaBouton}</div>
         </>
       )}
 
       {step === 3 && (
         <div className="space-y-4">
           <StepQuestion help="Choisis un chiffre que tu peux vérifier. Ce sera ton repère principal.">Comment sauras-tu que c&apos;est réussi ?</StepQuestion>
-          <TextField label="Ce que tu comptes" placeholder="Ex. : Distance courue" maxLength={120} value={draft.measureName} onChange={(e) => update({ measureName: e.target.value })} />
-          <TextField label="Ton but" inputMode="decimal" placeholder="Ex. : 10" value={draft.target} onChange={(e) => update({ target: e.target.value })} suffix={draft.unit || undefined} />
+          <ProfilLine profil={profil} onChange={changeProfil} />
+          <TextField label="Ce que tu comptes" placeholder={`Ex. : ${profil.reperes[0].nom}`} maxLength={120} value={draft.measureName} onChange={(e) => update({ measureName: e.target.value })} />
+          <TextField label="Ton but" inputMode="decimal" placeholder={`Ex. : ${nombre(profil.reperes[0].cible)}`} value={draft.target} onChange={(e) => update({ target: e.target.value })} suffix={draft.unit || undefined} />
           <div className="space-y-1">
             <TextField label="Unité" maxLength={20} value={draft.unit} onChange={(e) => update({ unit: e.target.value })} />
-            <ChipGroup label="Unités fréquentes" value={draft.unit} options={["km", "fois", "minutes", "€", "pages"].map((v) => ({ value: v, label: v }))} onChange={(v) => update({ unit: v })} />
+            <ChipGroup
+              label="Unités fréquentes"
+              value={draft.unit}
+              options={fusionnerSansDoublons(idees?.reperes.map((r) => r.unite) ?? [], profil.unites)
+                .slice(0, 6)
+                .map((v) => ({ value: v, label: v }))}
+              onChange={(v) => update({ unit: v })}
+            />
           </div>
+          {repereIdees.length > 0 && (
+            <ChipGroup
+              label="Autres repères possibles"
+              mode="multiple"
+              value={[]}
+              options={repereIdees.map((r) => ({ value: r.nom, label: `${r.nom} (${r.unite})` }))}
+              onChange={(nom) => {
+                const r = repereIdees.find((x) => x.nom === nom);
+                if (r) update({ measureName: r.nom, unit: r.unite, direction: r.sens, aggregation: r.regroupement, target: String(r.cible).replace(".", ",") });
+              }}
+            />
+          )}
+          {iaBouton}
           <TextField
             label="Où en es-tu aujourd'hui ?"
             hint="Facultatif. Sert de point de départ pour voir le chemin parcouru."
@@ -328,6 +436,19 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
             value={draft.direction}
             onChange={(v) => update({ direction: v })}
           />
+          <div className="space-y-1">
+            <p className="text-small font-semibold">Quand tu notes plusieurs valeurs dans la semaine, on…</p>
+            <ChipGroup
+              label="Regroupement des valeurs de la semaine"
+              value={draft.aggregation}
+              options={[
+                { value: "sum", label: "les additionne" },
+                { value: "avg", label: "fait la moyenne" },
+                { value: "last", label: "garde la dernière" },
+              ]}
+              onChange={(v) => update({ aggregation: v })}
+            />
+          </div>
         </div>
       )}
 
@@ -359,11 +480,22 @@ export function GoalWizard({ goalId }: { goalId?: string }) {
       {step === 5 && (
         <div className="space-y-4">
           <StepQuestion help="Une idée suffit, même petite.">Comment tu vas t&apos;y prendre, et où ?</StepQuestion>
-          <TextArea label="Comment" maxLength={1000} placeholder="Ex. : 3 sorties par semaine, en partant doucement" value={draft.how} onChange={(e) => update({ how: e.target.value })} />
+          <ProfilLine profil={profil} onChange={changeProfil} />
           <div className="space-y-1">
-            <TextField label="Où" hint="Facultatif" maxLength={120} placeholder="Ex. : au parc, à la maison" value={draft.where} onChange={(e) => update({ where: e.target.value })} />
-            <ChipGroup label="Lieux" value={draft.where} options={["À la maison", "Dehors", "Au travail", "En ligne"].map((v) => ({ value: v, label: v }))} onChange={(v) => update({ where: v })} />
+            <TextArea label="Comment" maxLength={1000} placeholder={`Ex. : ${profil.exemplesComment[0]}`} value={draft.how} onChange={(e) => update({ how: e.target.value })} />
+            <ChipGroup
+              label="Idées"
+              mode="multiple"
+              value={comments.filter((v) => draft.how.toLowerCase().includes(v.toLowerCase()))}
+              options={comments.map((v) => ({ value: v, label: v }))}
+              onChange={(v) => update({ how: draft.how.toLowerCase().includes(v.toLowerCase()) ? draft.how : draft.how.trim() ? `${draft.how.trim()}, ${v.charAt(0).toLowerCase()}${v.slice(1)}` : v })}
+            />
           </div>
+          <div className="space-y-1">
+            <TextField label="Où" hint="Facultatif" maxLength={120} placeholder={`Ex. : ${profil.lieux.slice(0, 2).join(", ").toLowerCase()}`} value={draft.where} onChange={(e) => update({ where: e.target.value })} />
+            <ChipGroup label="Lieux" value={draft.where} options={profil.lieux.map((v) => ({ value: v, label: v }))} onChange={(v) => update({ where: v })} />
+          </div>
+          {iaBouton}
         </div>
       )}
 

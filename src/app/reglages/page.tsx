@@ -193,6 +193,26 @@ export default function ReglagesPage() {
         />
       </section>
 
+      <section aria-labelledby="ia-t" className="space-y-2">
+        <h2 id="ia-t" className="text-heading">
+          Idées de l&apos;IA
+        </h2>
+        <p className="text-small text-ink-muted">
+          Sur demande seulement, le texte de ton objectif (et les réponses liées) est envoyé à l&apos;IA Claude d&apos;Anthropic, hors de l&apos;Union
+          européenne, pour te proposer des idées. Cap n&apos;enregistre pas ta demande.
+          {prefs.ia === "inconnu" && " Pas encore choisi : on te demandera ton accord à la première utilisation."}
+        </p>
+        <SegmentedControl
+          label="Idées de l'IA"
+          options={[
+            { value: "oui", label: "Activées" },
+            { value: "non", label: "Désactivées" },
+          ]}
+          value={prefs.ia}
+          onChange={(v) => setPrefs({ ia: v })}
+        />
+      </section>
+
       <Group title="Mes données" id="mes-donnees">
         {!account && (
           <p className="px-4 py-3 text-small text-ink-muted">

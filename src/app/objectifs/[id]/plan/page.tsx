@@ -9,6 +9,9 @@ import { Chip, ChipGroup, SegmentedControl, Stepper, TextField } from "@/compone
 import { AppHeader, StickyFooter } from "@/components/ui/layout";
 import { useToast } from "@/components/ui/toast";
 import { addDays, isIsoDate, weekStart } from "@/lib/domain/calculs";
+import { IdeesIa } from "@/components/cap/idees-ia";
+import type { IaSortie } from "@/lib/ia/schema";
+import { fusionnerSansDoublons, memeLibelle, profilDeObjectif, type RepereSuggere } from "@/lib/domain/profils";
 import type { MarkerAggregation, MarkerDirection } from "@/lib/domain/types";
 import { JOURS, JOURS_COURTS, lireNombre, semaine } from "@/lib/format";
 import { actionsOf, lastPlan, markersOf, reviewFor, thisWeek } from "@/lib/selectors";
@@ -32,7 +35,6 @@ interface MarkerRow {
   aggregation: MarkerAggregation;
 }
 
-const GENERIC = ["Préparer mes affaires la veille", "Bloquer un créneau dans mon agenda", "Commencer par 10 minutes"];
 let seq = 0;
 const key = () => `k${++seq}`;
 const num = (n: number) => String(n).replace(".", ",");
@@ -55,6 +57,7 @@ export default function PlanPage() {
   const [markers, setMarkers] = useState<MarkerRow[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [idees, setIdees] = useState<IaSortie | null>(null);
 
   useEffect(() => {
     document.title = "Mon plan de la semaine · Cap";
@@ -95,15 +98,31 @@ export default function PlanPage() {
     );
   }
 
+  const profil = profilDeObjectif(goal);
+  // Idées d'actions : d'abord celles tirées de « comment », puis celles du type d'objectif.
   const suggestions = (() => {
     const how = goal.context?.how ?? "";
     const parts = how
       .split(/[,;.\n]| et /)
       .map((s) => s.trim())
-      .filter((s) => s.length >= 4 && s.length <= 120);
-    const list = parts.length ? parts.slice(0, 3) : GENERIC;
-    return list.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+      .filter((s) => s.length >= 4 && s.length <= 120)
+      .slice(0, 3)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+    return fusionnerSansDoublons(idees?.actions ?? [], parts, profil.actions)
+      .filter((s) => !actions.some((a) => memeLibelle(a.label, s)))
+      .slice(0, idees ? 9 : 6);
   })();
+  const markerSuggestions: RepereSuggere[] = [
+    ...(idees?.reperes ?? []).map((r) => ({ nom: r.nom, unite: r.unite, sens: r.sens, regroupement: r.regroupement, cible: r.cible, depart: 0 })),
+    ...profil.reperes,
+  ].filter((r, i, all) => all.findIndex((x) => memeLibelle(x.nom, r.nom)) === i && !markers.some((m) => memeLibelle(m.name, r.nom)));
+  const addMarker = (r?: RepereSuggere) =>
+    setMarkers((list) => [
+      ...list,
+      r
+        ? { key: key(), name: r.nom, unit: r.unite, baseline: num(r.depart ?? 0), target: num(r.cible), direction: r.sens, aggregation: r.regroupement }
+        : { key: key(), name: "", unit: "", baseline: "0", target: "", direction: "up", aggregation: "sum" },
+    ]);
 
   const setAction = (k: string, patch: Partial<ActionRow>) => setActions((list) => list!.map((a) => (a.key === k ? { ...a, ...patch } : a)));
   const setMarker = (k: string, patch: Partial<MarkerRow>) => setMarkers((list) => list.map((m) => (m.key === k ? { ...m, ...patch } : m)));
@@ -165,8 +184,8 @@ export default function PlanPage() {
           </h2>
           <p className="text-small text-ink-muted">1 à 3 petites actions. Assez petites pour les faire même un jour moyen.</p>
         </div>
-        {actions.length === 0 && (
-          <div className="flex flex-wrap gap-x-2" aria-label="Suggestions">
+        {actions.length < 3 && suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-x-2" role="group" aria-label="Idées d'actions">
             {suggestions.map((s) => (
               <Chip key={s} variant="suggestion" icon={<Plus size={16} aria-hidden="true" />} onClick={() => addAction(s)}>
                 {s}
@@ -181,7 +200,7 @@ export default function PlanPage() {
                 <div className="flex-1">
                   <TextField
                     label="Ce que je fais"
-                    placeholder="Ex. : courir 20 minutes"
+                    placeholder={profil.placeholderAction}
                     maxLength={120}
                     value={a.label}
                     onChange={(e) => setAction(a.key, { label: e.target.value })}
@@ -224,6 +243,17 @@ export default function PlanPage() {
             Écris ton action en quelques mots.
           </p>
         )}
+        {actions.length < 3 && (
+          <IdeesIa
+            entree={() => ({
+              etape: "plan",
+              objectif: (goal.context?.what || goal.title).slice(0, 120),
+              pourquoi: goal.context?.why?.slice(0, 200) || undefined,
+              comment: goal.context?.how?.slice(0, 1000) || undefined,
+            })}
+            onIdees={setIdees}
+          />
+        )}
         {actions.length < 3 ? (
           <Button variant="ghost" iconLeft={<Plus size={20} aria-hidden="true" />} onClick={() => addAction()}>
             Ajouter une action
@@ -245,7 +275,7 @@ export default function PlanPage() {
             <li key={m.key} className="card space-y-3">
               <div className="flex items-start gap-2">
                 <div className="flex-1">
-                  <TextField label="Ce que je note" placeholder="Ex. : Minutes de sommeil" maxLength={120} value={m.name} onChange={(e) => setMarker(m.key, { name: e.target.value })} />
+                  <TextField label="Ce que je note" placeholder={`Ex. : ${(profil.reperes[1] ?? profil.reperes[0]).nom}`} maxLength={120} value={m.name} onChange={(e) => setMarker(m.key, { name: e.target.value })} />
                 </div>
                 {i === 0 ? (
                   <span className="mt-8">
@@ -292,12 +322,17 @@ export default function PlanPage() {
             </li>
           ))}
         </ul>
+        {markers.length < 3 && markerSuggestions.length > 0 && (
+          <div className="flex flex-wrap gap-x-2" role="group" aria-label="Idées de repères">
+            {markerSuggestions.map((r) => (
+              <Chip key={r.nom} variant="suggestion" icon={<Plus size={16} aria-hidden="true" />} onClick={() => addMarker(r)}>
+                {r.nom} ({r.unite})
+              </Chip>
+            ))}
+          </div>
+        )}
         {markers.length < 3 && (
-          <Button
-            variant="ghost"
-            iconLeft={<Plus size={20} aria-hidden="true" />}
-            onClick={() => setMarkers((list) => [...list, { key: key(), name: "", unit: "", baseline: "0", target: "", direction: "up", aggregation: "sum" }])}
-          >
+          <Button variant="ghost" iconLeft={<Plus size={20} aria-hidden="true" />} onClick={() => addMarker()}>
             Ajouter un repère
           </Button>
         )}

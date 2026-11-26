@@ -48,6 +48,11 @@ export interface Goal {
   icon?: string;
   smart: SmartCriteria;
   context?: GoalContext;
+  /**
+   * Id du profil d'objectif (cf. `domain/profils.ts`), facultatif.
+   * Absent (anciennes données, Supabase) : recalculé à partir du titre.
+   */
+  profil?: string;
   status: GoalStatus;
   createdAt: IsoDateTime;
   achievedAt?: IsoDateTime;

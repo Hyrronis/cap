@@ -58,6 +58,7 @@ export const goalSchema = z.strictObject({
   icon: texte(32).optional(),
   smart: smartSchema,
   context: contextSchema.optional(),
+  profil: z.string().regex(/^[a-z]{1,30}$/).optional(),
   status: goalStatusSchema,
   createdAt: isoDateTime,
   achievedAt: isoDateTime.optional(),
